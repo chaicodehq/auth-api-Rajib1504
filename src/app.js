@@ -20,10 +20,16 @@ export function createApp() {
   // Your code here
   const app = express();
   app.use(express.json({ limit: "16kb" }));
+  app.use("/api/auth", authRoutes);
+  app.use("/api/users", userRoutes);
 
   app.get("/", (req, res) => {
     res.status(200).json({
       Ok: true,
     });
   });
+
+  app.use(notFound);
+  app.use(errorHandler);
+  return app;
 }

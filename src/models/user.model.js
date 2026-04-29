@@ -44,10 +44,14 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    refreshToken: {
+      type: String,
+      select: false,
+    },
   },
   {
     // Schema options here
-    timeseries: true,
+    timestamps: true,
   },
 );
 
@@ -59,6 +63,7 @@ const userSchema = new mongoose.Schema(
  * 2. Hash password using bcrypt.hash(password, 10)
  * 3. Replace plain text password with hashed version
  *
+ *
  * Example structure:
  * userSchema.pre('save', async function(next) {
  *   // Only hash if password is modified
@@ -68,5 +73,19 @@ const userSchema = new mongoose.Schema(
  * });
  */
 
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
+    return next(); // if password is not updated so return
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    return next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // TODO: Create and export the User model
-const User = mongoose.model("User", userSchema);
+export const User = mongoose.model("User", userSchema);

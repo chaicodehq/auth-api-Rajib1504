@@ -1,6 +1,6 @@
-import bcrypt from 'bcryptjs';
-import { User } from '../models/user.model.js';
-import { signToken } from '../utils/jwt.js';
+import bcrypt from "bcryptjs";
+import { signToken } from "../utils/jwt.js";
+import { User } from "../models/user.model.js";
 
 /**
  * TODO: Register a new user
@@ -14,6 +14,30 @@ import { signToken } from '../utils/jwt.js';
 export async function register(req, res, next) {
   try {
     // Your code here
+    const { name, email, password } = req.body;
+    if ([name, email, password].some((field) => field?.trim() === "")) {
+      return res
+        .status(400)
+        .json({ error: { message: "All fields are required" } });
+    }
+
+    console.log(name, email, password);
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        error: {
+          message: "Email already exists",
+        },
+      });
+    }
+    console.log(existingUser);
+    const user = await User.create({ name, email, password });
+
+    return res.status(201).json({
+      // remove the password field from the user object before sending the response
+      user,
+      message: "User registered successfully",
+    });
   } catch (error) {
     next(error);
   }
