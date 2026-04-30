@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import { signToken } from "../utils/jwt.js";
 import { User } from "../models/user.model.js";
-
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 /**
  * TODO: Register a new user
  *
@@ -11,17 +12,26 @@ import { User } from "../models/user.model.js";
  * 3. Create new user (password will be hashed by pre-save hook)
  * 4. Return 201 with { user } (password excluded by default)
  */
+// normal hasing function for hash token
+const haseToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
 export async function register(req, res, next) {
   try {
     // Your code here
     const { name, email, password } = req.body;
-    if ([name, email, password].some((field) => field?.trim() === "")) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      [name, email, password].some((field) => field?.trim() === "")
+    ) {
       return res
         .status(400)
         .json({ error: { message: "All fields are required" } });
     }
 
-    console.log(name, email, password);
+    // console.log(name, email, password);
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({
@@ -30,12 +40,13 @@ export async function register(req, res, next) {
         },
       });
     }
-    console.log(existingUser);
+    // console.log(existingUser);
     const user = await User.create({ name, email, password });
-
+    const userObject = user.toObject();
+    delete userObject.password;
     return res.status(201).json({
       // remove the password field from the user object before sending the response
-      user,
+      user: userObject,
       message: "User registered successfully",
     });
   } catch (error) {
@@ -57,6 +68,60 @@ export async function register(req, res, next) {
 export async function login(req, res, next) {
   try {
     // Your code here
+    const { email, password } = req.body;
+    console.log(email, password);
+    if (
+      !email ||
+      !password ||
+      [email, password].some((field) => field?.trim() === "")
+    ) {
+      return res.status(400).json({
+        error: { message: "All fields are required" },
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+    if (!user) {
+      return res.status(401).json({
+        error: {
+          message: "Invalid credentials",
+        },
+      });
+    }
+
+    const passwordCheck = await bcrypt.compare(password, user.password);
+    if (!passwordCheck) {
+      return res.status(401).json({
+        error: {
+          message: "Invalid credentials",
+        },
+      });
+    }
+
+    const accessToken =  signToken({
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+    });
+    const refreshToken =  jwt.sign(
+      { _id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    //save the refresh token to db
+    user.refreshToken = haseToken(refreshToken);
+    await user.save({ validateBeforeSave: false });
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.refreshToken;
+
+    return res.status(200).json({
+      message: "User login success ",
+      user: userObj,
+      token: accessToken,
+      refreshToken,
+    });
   } catch (error) {
     next(error);
   }
